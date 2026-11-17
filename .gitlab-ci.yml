@@ -1,0 +1,40 @@
+image: debian:stable-slim
+
+stages:
+    - build_qemu
+    - build_jos
+    - grade_jos
+
+variables:
+  GIT_SUBMODULE_STRATEGY: normal
+  DEBIAN_FRONTEND: noninteractive
+
+cache:
+  paths:
+    - qemu/
+
+before_script:
+    - uname -a
+    - objdump -i | grep ^elf32-i386 || true
+    - gcc -m32 -print-libgcc-file-name || true
+    - apt update && apt -y install eatmydata && eatmydata apt -y install build-essential git gdb gcc-multilib libsdl1.2-dev libtool-bin libglib2.0-dev libz-dev libpixman-1-dev python
+    
+qemu_mit:
+    stage: build_qemu
+    script:
+        - ./mk-qemu-mit.sh $CI_PROJECT_DIR/qemu-mit
+    artifacts:
+        paths:
+            - qemu-mit
+            - conf/env.mk
+jos:
+    stage: build_jos
+    script:
+        - make
+
+grade:
+    stage: grade_jos
+    script:
+        - make grade > grade.out || true
+        - ./coverage.sh
+    coverage: '/Score: \d+.\d+/'

@@ -1,0 +1,4 @@
+[submodule "qemu"]
+	path = qemu
+	url = http://web.mit.edu/ccutler/www/qemu.git
+	branch = 6.828-2.3.0
