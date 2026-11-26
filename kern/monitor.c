@@ -13,6 +13,11 @@
 
 #define CMDBUF_SIZE	80	// enough for one VGA text line
 
+// -- My Macros
+#define FORMAT_LENGTH 80
+#define EBP(_v)       ((uint32_t)_v)
+#define EIP(_ebp)	      ((uint32_t)*(_ebp + 1))
+#define ARG(_v, _cnt) ((uint32_t)*(_v + ((_cnt) + 2)))
 
 struct Command {
 	const char *name;
@@ -24,6 +29,7 @@ struct Command {
 static struct Command commands[] = {
 	{ "help", "Display this list of commands", mon_help },
 	{ "kerninfo", "Display information about the kernel", mon_kerninfo },
+	{ "backtrace", "Display current calling stack", mon_backtrace }
 };
 
 /***** Implementations of basic kernel monitor commands *****/
@@ -31,6 +37,12 @@ static struct Command commands[] = {
 int
 mon_help(int argc, char **argv, struct Trapframe *tf)
 {
+
+	// ------ rex
+	int x = 1, y = 3, z = 4;
+	cprintf("x %d, y %d, z %d\n" ,x, y, z);
+	// -------
+
 	int i;
 
 	for (i = 0; i < ARRAY_SIZE(commands); i++)
@@ -58,6 +70,26 @@ int
 mon_backtrace(int argc, char **argv, struct Trapframe *tf)
 {
 	// Your code here.
+	
+	int32_t cnt = 0;
+	uint32_t *addr = 0;
+	char format[FORMAT_LENGTH] = {0};
+	char formatName[FORMAT_LENGTH] = {0};
+	struct Eipdebuginfo info;
+
+	strcpy(format, " ebp %08x eip %08x args %08x %08x %08x %08x %08x\n");
+	strcpy(formatName, " %s:%d: %.*s+%d\n");
+
+	addr = (uint32_t *) read_ebp();	
+	cprintf("Stack backtrace:\n");
+
+	while (addr != NULL) {
+		cprintf(format, EBP(addr), EIP(addr), ARG(addr, 0), ARG(addr, 1), ARG(addr, 2), ARG(addr, 3), ARG(addr, 4));
+		debuginfo_eip(EIP(addr), &info);
+		cprintf(formatName, info.eip_file, info.eip_line, info.eip_fn_namelen, info.eip_fn_name, EIP(addr) - info.eip_fn_addr);
+		addr = (uint32_t *) *addr; // adesso passi al frame precedente
+	}
+
 	return 0;
 }
 
