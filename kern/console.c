@@ -158,10 +158,64 @@ cga_init(void)
 }
 
 
+static void
+apply_ansi(uint8_t code, uint8_t *attr)
+{
+	static const uint8_t ansi_to_vga[8] = { 0, 4, 2, 6, 1, 5, 3, 7 };
+
+	if (code == 0) {
+		    *attr = 0x07;                                      // reset
+	} else if (code == 1) {
+		    *attr |= 0x08;                                     // bold / bright
+	} else if (code >= 30 && code <= 37) {
+		    *attr = (*attr & 0xf8) | ansi_to_vga[code - 30];       // testo
+	} else if (code >= 40 && code <= 47) {
+		    *attr = (*attr & 0x0f) | (ansi_to_vga[code - 40] << 4); // sfondo
+	}
+}
 
 static void
 cga_putc(int c)
 {
+	static uint8_t current_attr = 0x07;
+	static uint8_t state = 0;
+	static uint8_t val = 0;
+	uint8_t ch = c & 0xff;
+	
+	switch(state) {
+		case 0:
+			if (ch == '\x1b') {
+				state = 1;
+				val = 0;
+				return;
+			}
+			break;
+		case 1:
+			if (ch == '[') {
+				state = 2;
+				return;
+			}
+
+			state = 0;
+			return;
+		case 2:
+			if (ch >= '0' && ch <= '9') {
+				val = val * 10 + (ch - '0');
+				return;
+			} else if (ch == ';') {
+				apply_ansi(val, &current_attr);
+				val = 0;
+				return;
+			} else if (ch == 'm') {
+				apply_ansi(val, &current_attr);
+				state = 0;
+				return;
+			} else {
+				state = 0;
+				return;
+			}
+	}
+
 	// if no attribute given, then use black on white
 	if (!(c & ~0xFF))
 		c |= 0x0700;
@@ -197,7 +251,7 @@ cga_putc(int c)
 
 		memmove(crt_buf, crt_buf + CRT_COLS, (CRT_SIZE - CRT_COLS) * sizeof(uint16_t));
 		for (i = CRT_SIZE - CRT_COLS; i < CRT_SIZE; i++)
-			crt_buf[i] = 0x0700 | ' ';
+			crt_buf[i] = (current_attr << 8) | ' ';
 		crt_pos -= CRT_COLS;
 	}
 
